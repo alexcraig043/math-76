@@ -9,7 +9,7 @@ def linear_forward_model(state, A):
 
 
 # Define the true state evolution for comparison (simple linear model)
-def true_state_evolution(initial_state, A, steps=20):
+def true_state_evolution(initial_state, A, steps):
     states = [initial_state]
     for _ in range(steps - 1):
         states.append(A @ states[-1])
@@ -29,16 +29,16 @@ enkf = EnKF(
     observation_dimension=observation_dimension,
     forward_model=lambda x: linear_forward_model(x, A=A),
     observation_operator=H,
-    ensemble_variance=0.1,
-    observation_variance=0.1,
-    initial_ensemble=np.random.randn(state_dimension, ensemble_size) * 0.5,
+    ensemble_variance=0.0001,
+    observation_variance=0.0001,
+    initial_ensemble=np.random.randn(state_dimension, ensemble_size),
 )
 
-# Define 'times'
+# Define number of time steps
 times = np.arange(40)
 
 # True initial state and evolution
-true_initial_state = np.array([1, 1])
+true_initial_state = np.array([0, 1])
 true_states = true_state_evolution(true_initial_state, A=A, steps=len(times))
 
 # Run EnKF
