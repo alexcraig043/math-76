@@ -19,8 +19,8 @@ def true_state_evolution(initial_state, A, steps):
 # Initialize EnKF
 state_dimension = 2
 observation_dimension = 2
-ensemble_size = 1000
-A = np.array([[0.9, 0.1], [0.2, 0.8]])  # Linear model matrix
+ensemble_size = 100
+A = np.array(np.random.randn(state_dimension, state_dimension))  # Linear model matrix
 H = np.eye(state_dimension)  # Observe all state variables
 
 enkf = EnKF(
@@ -29,8 +29,8 @@ enkf = EnKF(
     observation_dimension=observation_dimension,
     forward_model=lambda x: linear_forward_model(x, A=A),
     observation_operator=H,
-    ensemble_variance=0.0001,
-    observation_variance=0.0001,
+    ensemble_variance=1,
+    observation_variance=1,
     initial_ensemble=np.random.randn(state_dimension, ensemble_size),
 )
 
@@ -38,7 +38,7 @@ enkf = EnKF(
 times = np.arange(40)
 
 # True initial state and evolution
-true_initial_state = np.array([0, 1])
+true_initial_state = np.random.randn(state_dimension)
 true_states = true_state_evolution(true_initial_state, A=A, steps=len(times))
 
 # Run EnKF
@@ -53,24 +53,13 @@ for time_step in range(1, len(times)):
     enkf.assimilation_step(observation)
     states.append(np.mean(enkf.ensemble, axis=1))
 
-
-# Debugging prints
-print("Dimension of times:", times.shape)
-print(
-    "Dimension of states (first item to infer structure):",
-    states[0].shape if states else "Empty list",
-)
-print("Length of states list:", len(states))
-print("Dimension of true_states:", true_states.shape)
-
 # Convert states to a numpy array for easier handling
 states_array = np.array(states)
-print("Shape of states_array (after conversion):", states_array.shape)
 
 # Plotting
 plt.figure(figsize=(10, 6))
 # Adjusted plotting for multi-dimensional data
-plt.plot(times, true_states[:, 0], "k-", label="True State (First Component)")
+plt.plot(times, true_states[:, 0], "r-", label="True State")
 plt.plot(
     times, states_array[:, 0], "b--", label="EnKF Mean State of the first component"
 )
@@ -79,11 +68,11 @@ plt.scatter(
     states_array[:, 0],
     color="blue",
     s=10,
-    label="EnKF Mean State at Each Step (first component)",
+    label="EnKF Mean State at Each Step",
 )
 plt.xlabel("Time Step")
 plt.ylabel("State Value")
-plt.title("True State vs. EnKF Predicted State (First Component)")
+plt.title("True State vs. EnKF Predicted State")
 plt.legend()
 plt.grid(True)
 plt.show()
