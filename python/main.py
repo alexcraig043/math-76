@@ -20,7 +20,9 @@ def true_state_evolution(initial_state, A, steps):
 state_dimension = 2
 observation_dimension = 2
 ensemble_size = 100
-A = np.array(np.random.randn(state_dimension, state_dimension))  # Linear model matrix
+A = np.array(
+    np.random.randn(state_dimension, observation_dimension)
+)  # Linear model matrix
 H = np.eye(state_dimension)  # Observe all state variables
 
 enkf = EnKF(
@@ -34,8 +36,8 @@ enkf = EnKF(
     initial_ensemble=np.random.randn(state_dimension, ensemble_size),
 )
 
-# Define number of time steps
-times = np.arange(40)
+# Define time steps
+times = np.arange(100)
 
 # True initial state and evolution
 true_initial_state = np.random.randn(state_dimension)
