@@ -77,4 +77,8 @@ plt.ylabel("State Value")
 plt.title("True State vs. EnKF Predicted State")
 plt.legend()
 plt.grid(True)
+
+# Save the plot
+plt.savefig("../plots/EnFK.png", dpi=600)
+
 plt.show()
