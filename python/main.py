@@ -20,9 +20,18 @@ def true_state_evolution(initial_state, A, steps):
 state_dimension = 2
 observation_dimension = 2
 ensemble_size = 100
-A = np.array(
-    np.random.randn(state_dimension, observation_dimension)
-)  # Linear model matrix
+
+# Generate a random linear forward model A
+A = np.array(np.random.randn(state_dimension, observation_dimension))
+# Multiply transpose of A with A to ensure it is positive definite
+A = A.T @ A
+# Perform QR decomposition to get an orthogonal matrix
+A, R = np.linalg.qr(A)
+
+### Rotational matrix example
+# theta = 0.3
+# A = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
 H = np.eye(state_dimension)  # Observe all state variables
 
 enkf = EnKF(
@@ -31,8 +40,8 @@ enkf = EnKF(
     observation_dimension=observation_dimension,
     forward_model=lambda x: linear_forward_model(x, A=A),
     observation_operator=H,
-    ensemble_variance=1,
-    observation_variance=1,
+    ensemble_variance=0.01,
+    observation_variance=0.01,
     initial_ensemble=np.random.randn(state_dimension, ensemble_size),
 )
 
@@ -79,6 +88,6 @@ plt.legend()
 plt.grid(True)
 
 # Save the plot
-plt.savefig("../plots/EnFK.png", dpi=600)
+plt.savefig("../plots/EnFK.png", dpi=600.0)
 
 plt.show()
