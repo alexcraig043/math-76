@@ -4,72 +4,114 @@ import numpy as np
 class EnKF:
     def __init__(
         self,
-        ensemble_size,  # Number of ensemble members
-        state_dimension,  # Dimension of the state vector
-        observation_dimension,  # Dimension of the observation vector
-        forward_model,  # A function that propagates the state forward (e.g., f(x) = x_next)
-        observation_operator,  # A matrix that maps the true state space to the observed space
-        ensemble_variance,
-        observation_variance,
-        initial_ensemble=None,
+        F,  # A function that propagates the state forward (e.g., f(x) = x_next)
+        H,  # A matrix that maps the true state space to the observed space
+        Qsqrt,  # The square root of the state noise covariance matrix
+        Rsqrt,  # The square root of the observation noise covariance matrix
+        seed,  # Seed for random number generator
+        n_members=10,  # Number of ensemble members
+        initialization=None,  # Initial ensemble members
     ):
-        self.ensemble_size = ensemble_size
-        self.state_dimension = state_dimension
-        self.observation_dimension = observation_dimension
-        self.forward_model = forward_model
-        self.observation_operator = np.array(
-            observation_operator
-        )  # Ensure this is a NumPy array
-        self.ensemble_variance = ensemble_variance
-        self.observation_variance = observation_variance
+        # Bind attributes
+        self.F = F
+        self.H = H
+        self.Qsqrt = Qsqrt  # State noise (also Sigma in notation)
+        self.Rsqrt = Rsqrt  # Measurement noise (also Gamma in notation)
+        self.n = self.H.shape[1]  # Infer state space dimension
+        self.m = self.H.shape[0]  # Measurement space dimension
+        self.n_members = n_members
 
-        if initial_ensemble is not None:
-            if initial_ensemble.shape != (state_dimension, ensemble_size):
-                raise ValueError(
-                    "initial_ensemble must have shape (state_dimension, ensemble_size)"
-                )
-            self.ensemble = initial_ensemble
+        if seed is not None:
+            np.random.seed(seed)
+
+        # Are we adding state space noise?
+        if self.Qsqrt is None:
+            self.with_state_noise = False
         else:
-            self.ensemble = np.random.randn(
-                state_dimension, ensemble_size
-            )  # Random initial ensemble
+            self.with_state_noise = True
+
+        # Handle ensemble initialization
+        if (initialization is not None) and (n_members is not None):
+            assert initialization.shape == (
+                self.n_members,
+                self.n,
+            ), "invalid shape for initialization."
+            self.members = initialization
+        elif (initialization is None) and (n_members is not None):
+            # Give random intialization
+            self.members = np.random.normal(size=(self.n_members, self.n))
+        else:
+            raise ValueError("Must give n_members!")
+
+    def advance_ensemble(self, v):
+        """Update the entire model based on the new observation y."""
+
+        # Execute propagation step
+        self.propagation_step()
+
+        # Execute analysis step
+        self.analysis_step(v)
+
+        return None
 
     def propagation_step(self):
-        ensemble_noise = np.random.normal(
-            0,
-            np.sqrt(self.ensemble_variance),
-            size=(self.state_dimension, self.ensemble_size),
-        )  # Generate noise for each ensemble member
-        for i in range(self.ensemble_size):
-            self.ensemble[:, i] = (
-                self.forward_model(self.ensemble[:, i]) + ensemble_noise[:, i]
-            )  # Update each ensemble member
+        """Carries out the propagation step."""
 
-    def assimilation_step(self, observation):
-        prior_covariance = np.cov(self.ensemble)
-        kalman_gain = self.kalman_update(prior_covariance)
-        perturbed_observation = observation + np.random.normal(
-            0, np.sqrt(self.observation_variance), self.observation_dimension
-        )
-        self.ensemble = self.kalman_filter(kalman_gain, perturbed_observation)
+        # Generate the blank forecast ensemble
+        self.members_pred = np.zeros_like(self.members)
 
-    def kalman_update(self, prior_covariance):
-        H = self.observation_operator
-        R = self.observation_variance * np.eye(self.observation_dimension)
-        S = H @ prior_covariance @ H.T + R
-        kalman_gain = prior_covariance @ H.T @ np.linalg.inv(S)
-        return kalman_gain
+        # For each ensemble member
+        for j in range(self.n_members):
+            # Apply the forward model to the ensemble member
+            if self.with_state_noise:
+                # With state noise
+                self.members_pred[j, :] = self.F(self.members[j, :]) + (
+                    self.Qsqrt @ np.random.normal(size=self.n)
+                )
+            else:
+                # Without state noise
+                self.members_pred[j, :] = self.F(self.members[j, :])
 
-    def kalman_filter(self, kalman_gain, perturbed_observation):
+        # Get the mean prediction of the forecasted ensemble (taking the average of each state entry across all members)
+        self.mean_pred = np.mean(self.members_pred, axis=0)
 
-        new_posterior_ensemble = np.zeros((self.state_dimension, self.ensemble_size))
-        H = self.observation_operator
-        for i in range(self.ensemble_size):
-            projected_ensemble_observation = H @ self.ensemble[:, i]
-            # Ensure difference is shaped correctly for matrix multiplication (column vector)
-            difference = perturbed_observation.reshape(
-                -1, 1
-            ) - projected_ensemble_observation.reshape(-1, 1)
-            correction = kalman_gain @ difference
-            new_posterior_ensemble[:, i] = self.ensemble[:, i] + correction.flatten()
-        return new_posterior_ensemble
+        # Get the covariance of the forecasted ensemble (each row is a state variable, so we need to transpose the matrix)
+        self.cov_pred = np.cov(self.members_pred.T)
+
+        return None
+
+    def analysis_step(self, v):
+        """Carries out the analysis step."""
+
+        # Generate the blank analysis ensemble
+        v_perturbed = np.zeros((self.n_members, self.m))
+
+        # For each ensemble member, generate a perturbed observation
+        for j in range(self.n_members):
+            v_perturbed[j, :] = v + (self.Rsqrt @ np.random.normal(size=self.m))
+
+        # Define the matrix that needs to be inverted
+        # Note: self.Rsqrt @ self.Rsqrt.T generates the observation noise covariance matrix
+        B = self.H @ self.cov_pred @ self.H.T + self.Rsqrt @ self.Rsqrt.T
+
+        # Invert the matrix
+        B_inv = np.linalg.inv(B)
+
+        # For each ensemble member
+        for j in range(self.n_members):
+            # Compute the Kalman gain
+            K = self.cov_pred @ self.H.T @ B_inv
+
+            # Compute the analysis state (u_new = u + K(y - H u))
+            new_state = self.members_pred[j, :] + K @ (
+                v_perturbed[j, :] - self.H @ self.members_pred[j, :]
+            )
+
+            # Update the ensemble member
+            self.members[j, :] = new_state
+
+        # Update the mean and covariance of the analysis ensemble
+        self.mean = np.mean(self.members_pred, axis=0)
+        self.cov = np.cov(self.members_pred.T)
+
+        return None
