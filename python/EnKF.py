@@ -4,7 +4,7 @@ import numpy as np
 class EnKF:
     def __init__(
         self,
-        F,  # A function that propagates the state forward (e.g., f(x) = x_next)
+        F,  # A function that propagates the state forward
         H,  # A matrix that maps the true state space to the observed space
         Qsqrt,  # The square root of the state noise covariance matrix
         Rsqrt,  # The square root of the observation noise covariance matrix
