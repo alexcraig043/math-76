@@ -72,7 +72,8 @@ class EnKF:
                 # Without state noise
                 self.members_pred[j, :] = self.F(self.members[j, :])
 
-        # Get the mean prediction of the forecasted ensemble (taking the average of each state entry across all members)
+        # Get the mean prediction of the forecasted ensemble
+        # Note: taking the average of each state entry across all members
         self.mean_pred = np.mean(self.members_pred, axis=0)
 
         # Get the covariance of the forecasted ensemble (each row is a state variable, so we need to transpose the matrix)
