@@ -35,7 +35,7 @@ class EnKF:
             assert initialization.shape == (
                 self.n,
                 self.n_members,
-            ), "invalid shape for initialization."
+            ), "Invalid shape for initialization."
             self.members = initialization
         elif (initialization is None) and (n_members is not None):
             # Give random intialization
@@ -78,10 +78,10 @@ class EnKF:
 
         # Get the covariance of the forecasted ensemble
         # Note: We are storing X_pred such that X_pred @ X_pred^T = cov_pred
-        self.X_pred = (self.members_pred - self.mean_pred[:, None]) / np.sqrt(
-            self.n_members - 1
-        )
-        # self.cov_pred = np.cov(self.members_pred)
+        # self.X_pred = (self.members_pred - self.mean_pred[:, None]) / np.sqrt(
+        #     self.n_members - 1
+        # )
+        self.cov_pred = np.cov(self.members_pred)
 
         return None
 
@@ -97,8 +97,8 @@ class EnKF:
 
         # Define the matrix that needs to be inverted
         # Note: self.Rsqrt @ self.Rsqrt.T generates the observation noise covariance matrix
-        B = self.H @ self.X_pred @ self.X_pred.T @ self.H.T + self.Rsqrt @ self.Rsqrt.T
-        # B = self.H @ self.cov_red @ self.H.T + self.Rsqrt @ self.Rsqrt.T
+        # B = self.H @ self.X_pred @ self.X_pred.T @ self.H.T + self.Rsqrt @ self.Rsqrt.T
+        B = self.H @ self.cov_pred @ self.H.T + self.Rsqrt @ self.Rsqrt.T
 
         # Invert the matrix
         B_inv = np.linalg.inv(B)
@@ -106,8 +106,8 @@ class EnKF:
         # For each ensemble member
         for j in range(self.n_members):
             # Compute the Kalman gain
-            K = self.X_pred @ self.X_pred.T @ self.H.T @ B_inv
-            # K = self.cov_pred @ self.H.T @ B_inv
+            # K = self.X_pred @ self.X_pred.T @ self.H.T @ B_inv
+            K = self.cov_pred @ self.H.T @ B_inv
 
             # Compute the analysis state (u_new = u + K(y - H u))
             new_state = self.members_pred[:, j] + K @ (
@@ -119,7 +119,7 @@ class EnKF:
 
         # Update the mean and covariance of the analysis ensemble
         self.mean = np.mean(self.members_pred, axis=1)
-        self.X = (self.members - self.mean) / np.sqrt(self.n_members - 1)
-        # self.cov = np.cov(self.members)
+        # self.X = (self.members - self.mean) / np.sqrt(self.n_members - 1)
+        self.cov = np.cov(self.members)
 
         return None
